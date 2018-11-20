@@ -1,0 +1,13 @@
+Source: aic-commu-lib
+Section: libs
+Priority: optional
+Maintainer: aicrobo <lijun@aicrobo.com>
+Build-Depends: 
+Standards-Version: 3.9.6
+Homepage: http://www.aicrobo.com
+
+Package: aic-commu-lib
+Architecture: amd64
+Depends: 
+Description: A network libs of aic robot sdk.
+

@@ -1,0 +1,5 @@
+/usr/lib/libaic_commu.so
+/usr/include/aic_commu.h
+/usr/lib/libprotobuf.so
+/usr/lib/libprotobuf.so.15
+/usr/lib/libprotobuf.so.15.0.1

@@ -1,0 +1,21 @@
+// See README.txt for information and build instructions.
+//
+// Note: START and END tags are used in comments to define sections used in
+// tutorials.  They are not part of the syntax for Protocol Buffers.
+//
+// To get an in-depth walkthrough of this file and the related examples, see:
+// https://developers.google.com/protocol-buffers/docs/tutorials
+
+// [START declaration]
+syntax = "proto3";
+package aic_commu_proto;
+// [END declaration]
+
+// [START messages]
+message message_pack {
+    string identity     = 1;    // 身份标识, 可用于NAT网络识别身份
+    int32  req_id       = 2;    // 消息序号, 可用于确定消息次序
+    int64  timestamp    = 3;    // 时间戳值, 可用于校准时钟
+    bytes  data     	= 4;    // 消息数据
+}
+// [END messages]
