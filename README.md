@@ -40,12 +40,13 @@ aic_commu library 是一个基于 [libzmq](https://github.com/zeromq/libzmq "lib
 1. 编译只需包含 src/aic_commu.h 和 libaic_commu.so (或者相应的dll) 文件。 
 2. 本项目的库文件依赖于 libprotobuf.so 和 libzmq.so (或者相应的dll) 文件, 请确保环境。
 
-# 1.1.7版本更新内容 
-* 修复bug
-1、修复request模式socket超时后，永远无法接收和发送数据的bug
-2、修复socket析构时引起的死锁问题
-* 新增功能
-1、send函数添加参数，可设置为无连接时丢弃请求数据
+## 1.1.7版本更新内容 
+* 修复bug。
+1、修复request模式socket超时后，永远无法接收和发送数据的bug。
+2、修复socket析构时引起的死锁问题。
+
+* 新增功能。
+1、send函数添加参数，可设置为无连接时丢弃请求数据。
 
 
 ```
