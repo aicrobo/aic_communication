@@ -6,6 +6,10 @@
 #include "zmq.hpp"
 #include "zmq_monitor_impl.h"
 #include <mutex>
+#include <atomic>
+#include <chrono>
+#include "waiter.h"
+
 
 namespace aicrobot
 {
@@ -19,49 +23,49 @@ using pack_ptr = std::shared_ptr<aic_commu_proto::message_pack>;
 class AicCommuBase : public AicCommuInterface
 {
 public:
-  AicCommuBase() = default;
+  AicCommuBase();
   virtual ~AicCommuBase() noexcept = default;
   AicCommuBase(const AicCommuBase &) = delete;
   AicCommuBase &operator=(const AicCommuBase &) = delete;
   AicCommuBase(AicCommuBase &&) = delete;
   AicCommuBase &operator=(AicCommuBase &&) = delete;
 
-  virtual bool run();
-  virtual bool close();
-  virtual bool send(bytes_ptr buffer, RecvCall func = nullptr);
-  virtual bool publish(const std::string &content, bytes_ptr buffer);
-  virtual bool alterSubContent(const std::string &content, bool add_or_delete);
+  virtual bool run() override;
+  virtual bool close() override;
+  virtual bool send(bytes_ptr buffer, RecvCall func = nullptr, bool discardBeforeConnected = false) override;
+  virtual bool publish(const std::string &content, bytes_ptr buffer) override;
+  virtual bool alterSubContent(const std::string &content, bool add_or_delete) override;
 
-  virtual void setLogCall(LogCall func, AicCommuLogLevels level, bool is_log_time)
+  virtual void setLogCall(LogCall func, AicCommuLogLevels level, bool is_log_time) override
   {
     log_call_ = func;
     log_level_ = level;
     is_log_time_ = is_log_time;
   }
 
-  virtual void setStatusCall(StatusCall func)
+  virtual void setStatusCall(StatusCall func) override
   {
     status_call_ = func;
   }
 
-  virtual void setPrintPackCall(PrintPackCall func)
+  virtual void setPrintPackCall(PrintPackCall func) override
   {
     print_pack_call = func;
   }
 
-  virtual void setRecvCall(RecvCall func, bool is_thread_safe)
+  virtual void setRecvCall(RecvCall func, bool is_thread_safe) override
   {
     recv_call_ = func;
     is_thread_safe_recv_ = is_thread_safe;
   }
 
-  virtual void setPollTimeout(int32_t milliseconds)
+  virtual void setPollTimeout(int32_t milliseconds) override
   {
     if (milliseconds > 1000)
       poll_timeout_ms_ = milliseconds;
   }
 
-  virtual void setHeartbeatIVL(int32_t milliseconds)
+  virtual void setHeartbeatIVL(int32_t milliseconds) override
   {
     if (milliseconds > 0)
     {
@@ -164,8 +168,12 @@ protected:
   std::string unpackSubscriber(const std::string &content);
 
 protected:
+  static zmq::context_t ctx_;   // 上下文环境
+  static std::atomic<std::uint64_t> serial_;
+
   std::string url_;      // 根据socket类型用于监听或连接
   std::string identity_; // 标识字符串, 用于调试打印等
+
 
   int32_t seq_id_ = 1; // 数据包序列号
 
@@ -178,8 +186,10 @@ protected:
   StatusCall status_call_ = nullptr;       // 状态变化回调函数
   PrintPackCall print_pack_call = nullptr; // 打印通讯数据回调函数
 
-  AicCommuLogLevels log_level_;  // 日志级别
+  AicCommuLogLevels log_level_ = AicCommuLogLevels::DEBUG;  // 日志级别
   std::mutex mutex_status_call_; // 状态变化互斥量
+
+  WaiterPtr monitor_start_waiter_;  //等待监控socket启动
 
   bool is_log_time_ = false;         // 日志是否记录时间
   bool is_thread_safe_recv_ = false; // recv_call_ 是否线程安全
@@ -188,6 +198,7 @@ protected:
   bool is_loop_exit_ = false;    // 仅当对象被销毁时设置为true
   bool is_started_ = false;      // 标记当前socket是否已经启动
   bool is_stoped_ = false;       // 仅当对象被销毁时设置为true
+  bool is_restart_ = false;      // 仅当request类型socket请求超时重新时设置为true
 
   const int kReconnIVL = 4 * 1000; // 重连初始周期(毫秒)
   const int kReconnMax = 8 * 1000; // 重连周期最大值(毫秒)

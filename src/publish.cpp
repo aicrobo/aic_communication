@@ -1,12 +1,13 @@
 #include "publish.h"
 #include "utility.h"
 #include <thread>
+#include <sstream>
 
 namespace aicrobot
 {
 
 AicCommuPublish::AicCommuPublish(const std::string &url,
-                                 const std::string &identity) : socket_(ctx_, zmq::socket_type::pub)
+                                 const std::string &identity) : socket_(AicCommuBase::ctx_, zmq::socket_type::pub)
 {
   AicCommuBase::url_ = url;
   AicCommuBase::identity_ = identity;
@@ -28,9 +29,17 @@ bool AicCommuPublish::run()
     socket_.setsockopt(ZMQ_SNDHWM, kSendQueueHWM);
     socket_.setsockopt(ZMQ_LINGER, kLingerTimeout);    
 
-    createMonitor(socket_, "inproc://monitor-publish");
-    socket_.bind(url_);
+    std::ostringstream o;
+    o<<serial_++;
+    std::string inproc_name("inproc://monitor-publish");
+    inproc_name += o.str();
 
+    monitor_start_waiter_->set_signaled(false);
+    createMonitor(socket_, inproc_name);
+    if(!monitor_start_waiter_->signaled())  //防止notify后再wait
+        monitor_start_waiter_->wait();
+
+    socket_.bind(url_);
     createLoop();
   }
   catch (zmq::error_t e)
@@ -45,21 +54,23 @@ bool AicCommuPublish::run()
 
 bool AicCommuPublish::close()
 {
-  if (!is_stoped_)
-  {
+
+    if(is_stoped_)
+        return false;
+    std::cout<<"enter publish mode socket close"<<std::endl;
     is_stoped_ = true;
+    while (is_started_)
+    {
+      wait_pub_queue_.broadcast();
+      SLEEP(100);
+      if (is_loop_exit_ && is_monitor_exit_)
+        break;
+    }
+    is_started_ = false;
     socket_.close();
-    ctx_.close();
     clearPublishQueue();
-  }
-  while (true)
-  {
-    wait_pub_queue_.broadcast();
-    SLEEP(100);
-    if (is_loop_exit_ && is_monitor_exit_)
-      break;
-  }
-  return true;
+    std::cout<<"leave publish mode socket close"<<std::endl;
+    return true;
 }
 
 bool AicCommuPublish::publish(const std::string &content, bytes_ptr buffer)
@@ -118,8 +129,9 @@ void AicCommuPublish::createLoop()
 {
   auto pkg = [&]() -> void {
     auto thread_id = getTid();
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] started loop.\n", thread_id);
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] started publish loop.\n", thread_id);
 
+    is_loop_exit_ = false;
     while (!is_stoped_)
     {
       try
@@ -164,7 +176,7 @@ void AicCommuPublish::createLoop()
           break;
       }
     } // while
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped loop.\n", thread_id);
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped publish loop.\n", thread_id);
     is_loop_exit_ = true;
   };
 

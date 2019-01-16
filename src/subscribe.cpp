@@ -6,7 +6,7 @@ namespace aicrobot
 {
 
 AicCommuSubscribe::AicCommuSubscribe(const std::string &url,
-                                     const std::string &identity) : socket_(ctx_, zmq::socket_type::sub)
+                                     const std::string &identity) : socket_(AicCommuBase::ctx_, zmq::socket_type::sub)
 {
   AicCommuBase::url_ = url;
   AicCommuBase::identity_ = identity;
@@ -29,9 +29,17 @@ bool AicCommuSubscribe::run()
     socket_.setsockopt(ZMQ_RECONNECT_IVL_MAX, kReconnMax);
     socket_.setsockopt(ZMQ_LINGER, kLingerTimeout);
 
-    createMonitor(socket_, "inproc://monitor-subscribe");
-    socket_.connect(url_);
+    std::ostringstream o;
+    o<<serial_++;
+    std::string inproc_name("inproc://monitor-subscribe");
+    inproc_name += o.str();
 
+    monitor_start_waiter_->set_signaled(false);
+    createMonitor(socket_, inproc_name);
+    if(!monitor_start_waiter_->signaled())  //防止notify后再wait
+        monitor_start_waiter_->wait();
+
+    socket_.connect(url_);
     createLoop();
   }
   catch (zmq::error_t e)
@@ -46,18 +54,21 @@ bool AicCommuSubscribe::run()
 
 bool AicCommuSubscribe::close()
 {
-  if (!is_stoped_)
-  {
-    is_stoped_ = true;
-    socket_.close();
-    ctx_.close();
-  }
-  while (true)
+
+  if (is_stoped_)
+      return false;
+
+  std::cout<<"enter subscribe mode socket close"<<std::endl;
+  is_stoped_ = true;
+  while (is_started_)
   {
     SLEEP(100);
     if (is_loop_exit_ && is_monitor_exit_)
       break;
   }
+  socket_.close();
+  is_started_ = false;
+  std::cout<<"leave subscribe mode socket close"<<std::endl;
   return true;
 }
 
@@ -131,10 +142,11 @@ void AicCommuSubscribe::createLoop()
 {
   auto pkg = [&]() -> void {
     auto thread_id = getTid();
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] started loop.\n", thread_id);
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] started subscribe loop.\n", thread_id);
 
     std::vector<zmq_pollitem_t> poll_vec;
     poll_vec.push_back({socket_, 0, ZMQ_POLLIN, 0});
+    is_loop_exit_ = false;
 
     while (!is_stoped_)
     {
@@ -169,7 +181,7 @@ void AicCommuSubscribe::createLoop()
           break;
       }
     } // while
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped loop.\n", thread_id);
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped subscribe loop.\n", thread_id);
     is_loop_exit_ = true;
   };
 

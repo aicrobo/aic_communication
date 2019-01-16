@@ -6,8 +6,10 @@ namespace aicrobot
 {
 
 AicCommuReply::AicCommuReply(const std::string &url,
-                             const std::string &identity) : router_(ctx_, zmq::socket_type::router),
-                                                            dealer_(ctx_, zmq::socket_type::dealer)
+                             const std::string &identity) : router_(AicCommuBase::ctx_, zmq::socket_type::router),
+                                                            dealer_(AicCommuBase::ctx_, zmq::socket_type::dealer),
+                                                            ctrl_pub_(AicCommuBase::ctx_, zmq::socket_type::pub),
+                                                            ctrl_sub_(AicCommuBase::ctx_, zmq::socket_type::sub)
 {
   AicCommuBase::url_ = url;
   AicCommuBase::identity_ = identity;
@@ -22,6 +24,7 @@ bool AicCommuReply::run()
 {
   if (is_started_)
     return false;
+
   try
   {
     router_.setsockopt(ZMQ_HEARTBEAT_IVL, heartbeat_interval_ms_);
@@ -31,9 +34,30 @@ bool AicCommuReply::run()
     dealer_.setsockopt(ZMQ_HEARTBEAT_TIMEOUT, heartbeat_timeout_ms_);
     dealer_.setsockopt(ZMQ_LINGER, kLingerTimeout);
 
-    createMonitor(router_, "inproc://monitor-router");
+    std::ostringstream o;
+    o<<serial_++;
+    std::string inproc_name("inproc://monitor-router");
+    inproc_name += o.str();
+
+    monitor_start_waiter_->set_signaled(false);
+    createMonitor(router_, inproc_name);
+    if(!monitor_start_waiter_->signaled())  //防止notify后再wait
+        monitor_start_waiter_->wait();
+
     router_.bind(url_);
-    dealer_.bind("inproc://workers");
+    std::ostringstream o2;
+    o2<<serial_++;
+    worker_inproc_name_ = std::string("inproc://workers");
+    worker_inproc_name_ += o2.str();
+    dealer_.bind(worker_inproc_name_);
+
+    std::ostringstream o3;
+    o3<<serial_++;
+    std::string ctrl_inproc_name_ = std::string("inproc://ctrl");
+    ctrl_inproc_name_ += o3.str();
+    ctrl_pub_.bind(ctrl_inproc_name_);
+    ctrl_sub_.connect(ctrl_inproc_name_);
+    ctrl_sub_.setsockopt(ZMQ_SUBSCRIBE,"",0);
 
     createWorker();
     createProxy();
@@ -50,19 +74,29 @@ bool AicCommuReply::run()
 
 bool AicCommuReply::close()
 {
-  if (!is_stoped_)
-  {
-    is_stoped_ = true;
-    router_.close();
-    dealer_.close();
-    ctx_.close();
-  }
-  while (true)
+
+  if(is_stoped_)
+      return false;
+
+  std::cout<<"enter reply mode socket close"<<std::endl;
+
+  //关闭proxy
+  std::string subscriber =  "TERMINATE";
+  zmq::message_t msg_content(subscriber.data(), subscriber.size());
+  ctrl_pub_.send(msg_content);
+
+  is_stoped_ = true;
+  while (is_started_)
   {
     SLEEP(100);
     if (is_loop_exit_ && is_monitor_exit_)
       break;
   }
+  is_started_ = false;
+  router_.close();
+  dealer_.close();
+
+  std::cout<<"leave reply mode socket close"<<std::endl;
   return true;
 }
 
@@ -117,7 +151,7 @@ void AicCommuReply::createProxy()
     callLog(AicCommuLogLevels::INFO, "[tid:%d] started proxy.\n", thread_id);
     try
     {
-      zmq::proxy(router_, dealer_, nullptr);
+      zmq::proxy_steerable(router_, dealer_, nullptr,ctrl_sub_);
     }
     catch (zmq::error_t e)
     {
@@ -150,7 +184,7 @@ void AicCommuReply::createWorker()
       worker->setsockopt(ZMQ_HEARTBEAT_IVL, heartbeat_interval_ms_);
       worker->setsockopt(ZMQ_HEARTBEAT_TIMEOUT, heartbeat_timeout_ms_);
       worker->setsockopt(ZMQ_LINGER, kLingerTimeout);
-      worker->connect("inproc://workers");
+      worker->connect(worker_inproc_name_);
       poll_vec.push_back({*worker, 0, ZMQ_POLLIN, 0});
     }
     catch (zmq::error_t e)

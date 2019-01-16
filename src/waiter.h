@@ -3,6 +3,9 @@
 
 #include <mutex>
 #include <condition_variable>
+#include <stdlib.h>
+#include <memory>
+
 
 namespace aicrobot
 {
@@ -16,6 +19,9 @@ public:
   Waiter &operator=(const Waiter &) = delete;
   Waiter(Waiter &&) = delete;
   Waiter &operator=(Waiter &&) = delete;
+
+  bool signaled(){return signaled_;}
+  void set_signaled(bool signaled){signaled_ = signaled;}
 
   /**
    * @brief wait            等待信号唤醒
@@ -44,6 +50,8 @@ private:
   std::condition_variable cond_;
   bool signaled_ = false;
 };
+
+using WaiterPtr = std::shared_ptr<Waiter>;
 
 } // namespace aicrobot
 

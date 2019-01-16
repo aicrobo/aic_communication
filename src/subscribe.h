@@ -11,10 +11,10 @@ class AicCommuSubscribe : public AicCommuBase
 public:
   AicCommuSubscribe(const std::string &url, const std::string &identity);
   ~AicCommuSubscribe() noexcept;
-  virtual bool alterSubContent(const std::string &content, bool add_or_delete);
+  virtual bool alterSubContent(const std::string &content, bool add_or_delete) override;
 
-  virtual bool run();
-  virtual bool close();
+  virtual bool run() override;
+  virtual bool close() override;
 
 private:
   void createLoop();
@@ -22,7 +22,7 @@ private:
   void invokeRecvCall(const std::string &content, bytes_ptr data);
 
 private:
-  zmq::context_t ctx_;   // 上下文环境
+//  zmq::context_t ctx_;   // 上下文环境
   zmq::socket_t socket_; // 套接字对象
 };
 

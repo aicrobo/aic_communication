@@ -1,15 +1,17 @@
 #include "request.h"
 #include "utility.h"
 #include <thread>
+#include <iostream>
 
 namespace aicrobot
 {
 
 AicCommuRequest::AicCommuRequest(const std::string &url,
-                                 const std::string &identity) : socket_(ctx_, zmq::socket_type::req)
+                                 const std::string &identity) : socket_(AicCommuBase::ctx_, zmq::socket_type::req)
 {
   AicCommuBase::url_ = url;
   AicCommuBase::identity_ = identity;
+  poll_timeout_ms_ = 5 * 1000;  //默认请求超时时间
 }
 
 AicCommuRequest::~AicCommuRequest()
@@ -19,8 +21,9 @@ AicCommuRequest::~AicCommuRequest()
 
 bool AicCommuRequest::run()
 {
-  if (is_started_)
+  if (is_started_ || is_stoped_)
     return false;
+
   try
   {
     socket_.setsockopt(ZMQ_HEARTBEAT_IVL, heartbeat_interval_ms_);
@@ -29,8 +32,18 @@ bool AicCommuRequest::run()
     socket_.setsockopt(ZMQ_RECONNECT_IVL_MAX, kReconnMax);
     socket_.setsockopt(ZMQ_LINGER, kLingerTimeout);
 
-    createMonitor(socket_, "inproc://monitor-request");
+    std::ostringstream o;
+    o<<serial_++;
+    std::string inproc_name("inproc://monitor-request");
+    inproc_name += o.str();
+
+    monitor_start_waiter_->set_signaled(false);
+    createMonitor(socket_, inproc_name);
+    if(!monitor_start_waiter_->signaled())  //防止notify后再wait
+        monitor_start_waiter_->wait();
+
     socket_.connect(url_);
+
     createLoop();
   }
   catch (zmq::error_t e)
@@ -43,30 +56,116 @@ bool AicCommuRequest::run()
   return true;
 }
 
+/**
+ * @brief AicCommuRequest::restart  清除旧的连接，建立新的连接
+ * @return
+ */
+bool AicCommuRequest::restart(){
+
+    //释放旧资源
+    is_restart_ = true;
+    while (true)
+    {
+      wait_send_queue_.broadcast();
+      SLEEP(100);
+      if (is_monitor_exit_)
+        break;
+    }
+    socket_.close();
+    clearSendQueue();
+
+
+    //创建新的socket
+    try{
+       socket_ = zmq::socket_t(AicCommuBase::ctx_,zmq::socket_type::req);
+    }catch(zmq::error_t e){
+        std::cout<<"create req socket failed: "<<e.what()<<std::endl;
+        callLog(AicCommuLogLevels::FATAL,"create req socket failed: %s",e.what());
+        is_restart_ = false;
+        return false;
+    }
+
+    is_restart_ = false;
+    is_started_ = false;
+    bool ret = run();
+    if(ret)
+        is_monitor_exit_ = false;
+
+    return ret;
+
+}
+
 bool AicCommuRequest::close()
 {
-  if (!is_stoped_)
+
+  if (is_stoped_)
+    return false;
+
+  std::cout<<"enter request mode socket close"<<std::endl;
+  is_stoped_ = true;
+  auto start = std::chrono::system_clock::now();
+  while (is_started_)
   {
-    is_stoped_ = true;
-    socket_.close();
-    ctx_.close();
-    clearSendQueue();
-  }
-  while (true)
-  {
-    wait_send_queue_.broadcast();
-    SLEEP(100);
     if (is_loop_exit_ && is_monitor_exit_)
       break;
+    wait_send_queue_.broadcast();
+    SLEEP(100);
   }
+
+  socket_.close();
+  clearSendQueue();
+  is_started_ = false;
+  std::cout<<"leave request mode socket close"<<std::endl;
   return true;
 }
 
-bool AicCommuRequest::send(bytes_ptr buffer, RecvCall func)
+/**
+ * @brief AicCommuRequest::setStatusCall    设置通讯状态回调，更新连接标志
+ * @param func
+ * @return
+ */
+void AicCommuRequest::setStatusCall(StatusCall func){
+    if(func == nullptr){
+        status_call_ = nullptr;
+    }else{
+        status_call_ = [func,this](AicCommuStatus status, const std::string &msg){
+            if(status == AicCommuStatus::CONNECTED){
+                this->is_connected_ = true;
+//                if(is_timeout_){    //由超时引起的重新连接不再通知调用者
+//                    is_timeout_ = false;
+//                    return;
+//                }
+            }else if(status == AicCommuStatus::DISCONNECTED ){
+                this->is_connected_ = false;
+                if(is_timeout_ && disconnect_after_timeout_){    //由超时重连引起的连接断开不再通知调用者
+                    disconnect_after_timeout_ = false;
+                    return;
+                }
+            }else if(status == AicCommuStatus::TIMEOUT){
+                is_timeout_ = true;
+                disconnect_after_timeout_ = true;
+            }
+
+            if(is_stoped_){ //对象將要释放时，忽略掉任何通知
+                return;
+            }
+
+            func(status,msg);
+        };
+    }
+}
+
+bool AicCommuRequest::send(bytes_ptr buffer, RecvCall func, bool discardBeforeConnected)
 {
   if (buffer == nullptr)
     return false;
-  bool is_empty;
+
+  if(discardBeforeConnected && is_connected_ == false){
+      callLog(AicCommuLogLevels::INFO,"%s","discard send request before connected");
+      return false; //连接成功前丢充掉所有请求
+  }
+
+  bool is_empty = false;
   {
     std::lock_guard<std::mutex> lk(mutex_send_queue_);
     is_empty = queue_send_.empty();
@@ -132,13 +231,14 @@ void AicCommuRequest::createLoop()
 {
   auto pkg = [&]() -> void {
     auto thread_id = getTid();
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] started loop.\n", thread_id);
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] started request loop.\n", thread_id);
 
     std::vector<zmq_pollitem_t> poll_vec;
     poll_vec.push_back({socket_, 0, ZMQ_POLLIN, 0});
 
     bool is_timeout = false;
     ReqData req_data(nullptr, nullptr);
+    is_loop_exit_ = false;
 
     while (!is_stoped_)
     {
@@ -188,12 +288,15 @@ void AicCommuRequest::createLoop()
           else
             invokeRecvCall(decodeRecvBuf(pack_recv));
           is_timeout = false;
+
         }
         else
         {
           // 发送的数据应答超时, 通知调用方
           is_timeout = true;
-          invokeStatusCall(AicCommuStatus::TIMEOUT, "request timeout");
+          invokeStatusCall(AicCommuStatus::TIMEOUT, url_);
+          break;
+
         }
       }
       catch (zmq::error_t e)
@@ -204,8 +307,17 @@ void AicCommuRequest::createLoop()
           break;
       }
     } // while
-    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped loop.\n", thread_id);
-    is_loop_exit_ = true;
+    callLog(AicCommuLogLevels::INFO, "[tid:%d] stoped request loop.\n", thread_id);
+
+
+    if(is_timeout && !is_stoped_){
+        callLog(AicCommuLogLevels::DEBUG, "[tid:%d] reconnect after timeout.\n", thread_id);
+        if(!restart())  //超时后，重新创建socket连接
+             is_loop_exit_ = true;
+    }else
+        is_loop_exit_ = true;
+
+
   };
 
   std::thread thr(pkg);

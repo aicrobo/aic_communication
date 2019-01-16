@@ -25,10 +25,10 @@ class AicCommuPublish : public AicCommuBase
 public:
   AicCommuPublish(const std::string &url, const std::string &identity);
   ~AicCommuPublish() noexcept;
-  virtual bool publish(const std::string &content, bytes_ptr buffer);
+  virtual bool publish(const std::string &content, bytes_ptr buffer) override;
 
-  virtual bool run();
-  virtual bool close();
+  virtual bool run() override;
+  virtual bool close() override;
 
 private:
   void createLoop();
@@ -36,7 +36,7 @@ private:
   void printPackWrapper(const std::string &content, pack_ptr pack, int thread_id);
 
 private:
-  zmq::context_t ctx_;            // 上下文环境
+//  zmq::context_t ctx_;            // 上下文环境
   zmq::socket_t socket_;          // 套接字对象
   Waiter wait_pub_queue_;         // 等待发布队列非空
   std::mutex mutex_pub_queue_;    // 发布队列互斥量

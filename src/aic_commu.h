@@ -21,11 +21,12 @@
 #define _IN_  // 标记入参
 #define _OUT_ // 标记出参
 
-//库版本号
-#define AIC_COMMU_LIB_VERSION "1.0.4"
 
 namespace aicrobot
 {
+
+//库版本号
+extern std::string aic_commu_lib_version;
 
 enum class EXPORT_CLASS AicCommuType
 {
@@ -64,7 +65,7 @@ enum class EXPORT_CLASS AicCommuStatus
   CLOSE_FAILED,   // 关闭失败
   ACCEPTED,       // 成功接收连接请求
   ACCEPT_FAILED,  // 接收连接请求失败
-  TIMEOUT,        // 超时(仅用于request模式)
+  TIMEOUT,        // 超时(仅用于request模式，request模式下超时会自动重连，在重连过程中，不会发送DISCONNECTED事件，但会发送CONNECTED事件)
 };
 
 enum class EXPORT_CLASS AicCommuLogLevels
@@ -98,7 +99,7 @@ using PrintPackCall = std::function<bool(bool, AicCommuType, const std::string &
 /**
  * @brief StatusCall      状态变化回调函数
  * @param 参数一           枚举的状态类型
- * @param 参数二           描述与状态对应的, 链接的地址信息
+ * @param 参数二           与socket相关的地址信息，对于服务端socket类型，该参数是客户端的地址；对于客户端socket类型，该参数是服务端地址
  * @return
  */
 using StatusCall = std::function<void(AicCommuStatus, const std::string &)>;
@@ -140,9 +141,11 @@ public:
    * @brief send               发送数据
    * @param buffer             发送的内容, 不能为空
    * @param func               nullptr 时使用 setRecvCall 指定的回调; 否则使用 func 指定的回调
+   * @param discardBeforeConnected  该参数只有请求模式socket有效，
+   *                                true:在与服务端建立连接前丢弃所有发送请求，false：不管有没有连接成功，都把发送请求加入发送队列里
    * @return                   true:已加入发送队列; false:失败
    */
-  virtual bool send(bytes_ptr buffer, RecvCall func = nullptr) = 0;
+  virtual bool send(bytes_ptr buffer, RecvCall func = nullptr, bool discardBeforeConnected = false) = 0;
 
   /**
    * @brief publish            发布消息
@@ -159,10 +162,10 @@ public:
    * @param is_log_time        日志是否追加时间，默认false
    * @return
    */
-  virtual void setLogCall(LogCall func, AicCommuLogLevels level, bool is_log_time) = 0;
+  virtual void setLogCall(LogCall func, AicCommuLogLevels level=AicCommuLogLevels::DEBUG, bool is_log_time=false) = 0;
 
   /**
-   * @brief setStatusCall      设置状态变化回调
+   * @brief setStatusCall      设置状态变化回调，必须在run之前调用，否则设置无效
    * @param func               回调函数指针
    * @return
    */
@@ -248,7 +251,7 @@ public:
    * @brief version 返回当前库的版本号
    * @return
    */
-  static inline std::string version(){return AIC_COMMU_LIB_VERSION;}
+  static std::string version(){return aic_commu_lib_version;}
 };
 
 } // namespace aicrobot

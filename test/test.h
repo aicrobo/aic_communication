@@ -36,6 +36,7 @@ void recv_func(const std::string *p_sub,
                bytes_ptr data_in,
                bytes_ptr data_out)
 {
+//SLEEP(5000);
   std::string msg(data_in->data(), data_in->data() + data_in->size());
   printf("recv ---> <content> %s ---> <size> %lu bytes\n", msg.c_str(), data_in->size());
   if (data_out != nullptr)
@@ -148,9 +149,10 @@ bool print_pack_func(bool is_send, AicCommuType type, const std::string &msg, by
 
 void *thr_req()
 {
+  printf("lib version:%s\n",AicCommuFactory::version().c_str());
   auto obj = AicCommuFactory::newSocket(AicCommuType::CLIENT_REQUEST, "127.0.0.1", 50005, "req");
 
-  obj->setPollTimeout(20000);
+  obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(10000);
   obj->setRecvCall(&recv_func, false);
   obj->setStatusCall(&status_func);
@@ -158,13 +160,20 @@ void *thr_req()
   obj->setPrintPackCall(&print_pack_func);
   obj->run();
   std::string msg("request-msg");
+
+  int i=0;
   while (true)
   {
-    bytes_ptr data = std::make_shared<bytes_vec>(msg.data(),
-                                                 msg.data() + msg.length());
-    obj->send(data);
-    obj->send(data, &recv_req_func);
-    SLEEP(100);
+    i++;
+    char buf[100];
+    sprintf(buf,"request-msg%d",i);
+    bytes_ptr data = AicCommuFactory::makeBytesPtr(buf,
+                                                 strlen(buf));
+    bool ret = obj->send(data,nullptr,false);
+    printf("%s",ret ? "-----send request success\n" : "-----send request failed\n");
+    //ret = obj->send(data, &recv_req_func);
+    //printf("%s",ret ? "-----send request success\n" : "-----send request failed\n");
+    SLEEP(10000);
   }
   //obj->close();
 }
@@ -173,13 +182,14 @@ void *thr_rep()
 {
   auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_REPLY, "127.0.0.1", 50005, "rep");
 
-  obj->setPollTimeout(20000);
+  obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(0); // 一般来说, 服务端不用发送心跳, 只接收
   obj->setRecvCall(&recv_func, false);
   obj->setStatusCall(&status_func);
   obj->setLogCall(&log_func, AicCommuLogLevels::DEBUG, true);
   obj->setPrintPackCall(&print_pack_func);
   obj->run();
+
   while (true)
   {
     SLEEP(10000);
@@ -191,7 +201,7 @@ void *thr_sub()
 {
   auto obj = AicCommuFactory::newSocket(AicCommuType::CLIENT_SUBSCRIBE, "127.0.0.1", 50006, "sub");
 
-  obj->setPollTimeout(10000);
+  obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(5000);
   obj->setRecvCall(&recv_func, false);
   obj->setStatusCall(&status_func);
@@ -199,6 +209,7 @@ void *thr_sub()
   obj->setPrintPackCall(&print_pack_func);
   obj->alterSubContent("test!!", true);
   obj->run();
+
   while (true)
   {
     SLEEP(10000);
@@ -210,19 +221,20 @@ void *thr_pub()
 {
   auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_PUBLISH, "127.0.0.1", 50006, "pub");
 
-  obj->setPollTimeout(10000);
+  obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(0); // 一般来说, 服务端不用发送心跳, 只接收
   obj->setStatusCall(&status_func);
   obj->setLogCall(&log_func, AicCommuLogLevels::DEBUG, true);
   obj->setPrintPackCall(&print_pack_func);
   obj->run();
+
   std::string msg("publish-msg");
   while (true)
   {
     bytes_ptr data = std::make_shared<bytes_vec>(msg.data(),
                                                  msg.data() + msg.length());
     obj->publish("test!!", data);
-    SLEEP(100);
+    SLEEP(3000);
   }
   //obj->close(); // 关闭之后不能重新run, 只能释放对象。
 }
