@@ -74,6 +74,12 @@ public:
     }
   }
 
+  virtual void setDiscardPacketBeforeConntect(bool param) override
+  {
+    return;
+  }
+
+
 protected:
   /**
    * @brief callLog       格式化日志, 并转发回调函数

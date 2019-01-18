@@ -138,6 +138,13 @@ public:
   virtual bool close() = 0;
 
   /**
+   * @brief setDiscardPacketBeforeConntect  设置连接建立前是否丢弃要发送的请求包，只对request模式socket有效
+   * @param param   true:在连接建立前调用send函数时会丢弃本次发送的包，请求超时后清空请求队列；false：连接建立前发送的包会放到请求队列里，请求超时后不会清空请求队列
+   * @return
+   */
+  virtual void setDiscardPacketBeforeConntect(bool param) = 0;
+
+  /**
    * @brief send               发送数据
    * @param buffer             发送的内容, 不能为空
    * @param func               nullptr 时使用 setRecvCall 指定的回调; 否则使用 func 指定的回调

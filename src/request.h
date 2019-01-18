@@ -29,6 +29,7 @@ public:
   virtual bool run() override;
   virtual bool close() override;
   virtual void setStatusCall(StatusCall func) override;
+  virtual void setDiscardPacketBeforeConntect(bool param) override;
 
 private:
   void createLoop();
@@ -42,6 +43,7 @@ private:
   zmq::socket_t socket_; // 套接字对象
   bool  is_connected_   = false;    //是否连接上服务端
   bool  is_timeout_     = false;    //是否超时
+  bool  discard_packet_before_connect_  = false;    //连接建立前是否丢弃请求包
   bool  disconnect_after_timeout_    = false;    //是否是请求超时后重新连接引起的连接断开
 //  bool  is_restarting_;  //正在执行restart
 

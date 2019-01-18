@@ -72,7 +72,10 @@ bool AicCommuRequest::restart(){
         break;
     }
     socket_.close();
-    clearSendQueue();
+    if(discard_packet_before_connect_){
+        std::cout<<"\n=========clear send queue\n";
+        clearSendQueue();
+    }
 
 
     //创建新的socket
@@ -153,6 +156,11 @@ void AicCommuRequest::setStatusCall(StatusCall func){
             func(status,msg);
         };
     }
+}
+
+void AicCommuRequest::setDiscardPacketBeforeConntect(bool param)
+{
+    discard_packet_before_connect_ = param;
 }
 
 bool AicCommuRequest::send(bytes_ptr buffer, RecvCall func, bool discardBeforeConnected)
@@ -256,7 +264,6 @@ void AicCommuRequest::createLoop()
               continue;
             }
             req_data = queue_send_.front();
-            queue_send_.pop();
           }
           // 把业务数据包封装到 protobuf 数据里
           auto pack_send = encodeSendBuf(req_data.data_, seq_id_);
@@ -276,6 +283,7 @@ void AicCommuRequest::createLoop()
         {
           zmq::message_t msg_recv;
           socket_.recv(&msg_recv);
+          queue_send_.pop();
 
           // 解析收取的 protobuf 数据包, 根据需要打印内容
           pack_ptr pack_recv = std::make_shared<pack_meta>();
