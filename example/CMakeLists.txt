@@ -22,7 +22,7 @@ target_link_libraries(pub ${DEP_LIB})
 
 else(_linux_)
 
-set(DEP_LIB libpthread.so ${LIBRARY_THIRD_PARTY_PATH}/libzmq.a ${LIBRARY_THIRD_PARTY_PATH}/libprotobuf.so.15.0.1 ${LIBRARY_OUTPUT_PATH}/libaic_commu.so)
+set(DEP_LIB libpthread.so libprotobuf.so ${LIBRARY_OUTPUT_PATH}/libaic_commu.so)
 target_link_libraries(req ${DEP_LIB})
 target_link_libraries(rep ${DEP_LIB})
 target_link_libraries(sub ${DEP_LIB})

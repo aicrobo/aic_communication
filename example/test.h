@@ -36,7 +36,6 @@ void recv_func(const std::string *p_sub,
                bytes_ptr data_in,
                bytes_ptr data_out)
 {
-//SLEEP(5000);
   std::string msg(data_in->data(), data_in->data() + data_in->size());
   printf("recv ---> <content> %s ---> <size> %lu bytes\n", msg.c_str(), data_in->size());
   if (data_out != nullptr)
@@ -153,7 +152,7 @@ void *thr_req()
   auto obj = AicCommuFactory::newSocket(AicCommuType::CLIENT_REQUEST, "127.0.0.1", 50005, "req");
 
   obj->setPollTimeout(5000);
-  obj->setHeartbeatIVL(10000);
+  obj->setHeartbeatIVL(1000);
   obj->setRecvCall(&recv_func, false);
   obj->setStatusCall(&status_func);
   obj->setLogCall(&log_func, AicCommuLogLevels::DEBUG, true);
@@ -171,16 +170,13 @@ void *thr_req()
                                                  strlen(buf));
     bool ret = obj->send(data,nullptr,false);
     printf("%s",ret ? "-----send request success\n" : "-----send request failed\n");
-    //ret = obj->send(data, &recv_req_func);
-    //printf("%s",ret ? "-----send request success\n" : "-----send request failed\n");
-    SLEEP(10000);
+    SLEEP(1000);
   }
-  //obj->close();
 }
 
 void *thr_rep()
 {
-  auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_REPLY, "127.0.0.1", 50005, "rep");
+  auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_REPLY, "*", 50005, "rep");
 
   obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(0); // 一般来说, 服务端不用发送心跳, 只接收
@@ -194,7 +190,6 @@ void *thr_rep()
   {
     SLEEP(10000);
   }
-  //obj->close();
 }
 
 void *thr_sub()
@@ -214,12 +209,11 @@ void *thr_sub()
   {
     SLEEP(10000);
   }
-  //obj->close();
 }
 
 void *thr_pub()
 {
-  auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_PUBLISH, "127.0.0.1", 50006, "pub");
+  auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_PUBLISH, "*", 50006, "pub");
 
   obj->setPollTimeout(5000);
   obj->setHeartbeatIVL(0); // 一般来说, 服务端不用发送心跳, 只接收
@@ -234,9 +228,9 @@ void *thr_pub()
     bytes_ptr data = std::make_shared<bytes_vec>(msg.data(),
                                                  msg.data() + msg.length());
     obj->publish("test!!", data);
-    SLEEP(3000);
+    SLEEP(1000);
   }
-  //obj->close(); // 关闭之后不能重新run, 只能释放对象。
+
 }
 
 } // namespace aicrobot
