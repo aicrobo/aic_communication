@@ -1,7 +1,0 @@
-[submodule "3rd_party/libzmq"]
-	path = 3rd_party/libzmq
-	url = https://github.com/zeromq/libzmq.git
-[submodule "3rd_party/protobuf"]
-	path = 3rd_party/protobuf
-	url = https://github.com/protocolbuffers/protobuf.git
-	branch = 3.5.x
