@@ -58,7 +58,7 @@ sudo make install
 2. 下载依赖库源码
 	protobuf（https://github.com/protocolbuffers/protobuf.git） 
 	libzmq（https://github.com/zeromq/libzmq.git）
-3. 编译zmq为静态库
+3. 编译zmq
 ```c
 cd  aic_communication/builds
 mkdir windows 
@@ -101,11 +101,11 @@ cmake ..
 
 ## -----------版本记录-----------
 ## 1.1.7版本更新内容 
-* 修复bug。
+修复bug。
  * 修复request模式socket超时后，永远无法接收和发送数据的bug。
  * 修复socket析构时引起的死锁问题。
 
-* 新增功能。
+新增功能。
  * send函数添加参数，可设置为无连接时丢弃请求数据。
 
 
