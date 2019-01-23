@@ -104,7 +104,7 @@ bool AicCommuRequest::close()
   if (is_stoped_)
     return false;
 
-  std::cout<<"enter request mode socket close"<<std::endl;
+  callLog(AicCommuLogLevels::TRACE, "%s","enter request mode socket close\n");
   is_stoped_ = true;
   auto start = std::chrono::system_clock::now();
   while (is_started_)
@@ -118,7 +118,7 @@ bool AicCommuRequest::close()
   socket_.close();
   clearSendQueue();
   is_started_ = false;
-  std::cout<<"leave request mode socket close"<<std::endl;
+  callLog(AicCommuLogLevels::TRACE, "%s","leave request mode socket close\n");
   return true;
 }
 
@@ -201,20 +201,30 @@ void AicCommuRequest::clearSendQueue()
  * @param pack                  数据包
  * @return
  */
-void AicCommuRequest::printPackWrapper(bool is_send, pack_ptr pack, int thread_id)
+void AicCommuRequest::printPackWrapper(bool is_send, bytes_ptr pack, int thread_id)
 {
   if (print_pack_call != nullptr)
   {
-    bytes_ptr data = std::make_shared<bytes_vec>(
-        pack->mutable_data()->data(),
-        pack->mutable_data()->data() + pack->data().size());
+    char* p = pack->data();
+    int total_size  = GET_INT(p);
+    int header_size = GET_INT(p);
+    p = pack->data();
+    bytes_ptr data = std::make_shared<bytes_vec>(p+header_size , p+total_size);
+    OFFSET(p,8);
+    int identity_len = GET_INT(p);
+    std::string identity(p,identity_len);
+    OFFSET(p,identity_len);
+    OFFSET(p,4);
+    int pack_id = GET_INT(p);
+    OFFSET(p,4);
+    long long timestamp = GET_LONGLONG(p);
 
     std::string msg = stringFormat(
-        "[tid:%d] req_id:%u, identity:%s, time:%s",
+        "[tid:%d] pack_id:%u, identity:%s, time:%s",
         thread_id,
-        pack->req_id(),
-        pack->identity().c_str(),
-        std::to_string(pack->timestamp()).c_str());
+        pack_id,
+        identity.c_str(),
+        std::to_string(timestamp).c_str());
 
     print_pack_call(is_send, AicCommuType::CLIENT_REQUEST, msg.c_str(), data);
   }
@@ -268,13 +278,12 @@ void AicCommuRequest::createLoop()
           // 把业务数据包封装到 protobuf 数据里
           auto pack_send = encodeSendBuf(req_data.data_, seq_id_);
           ++seq_id_;
-          std::string bytes;
-          pack_send->SerializeToString(&bytes);
+          printPackWrapper(true, pack_send, thread_id);
 
           // 发送 protobuf 数据, 根据需要打印内容
-          zmq::message_t msg_send(bytes.data(), bytes.size());
+          zmq::message_t msg_send(pack_send->data(), pack_send->size());
           socket_.send(msg_send);
-          printPackWrapper(true, pack_send, thread_id);
+//          printPackWrapper(true, pack_send, thread_id);
         }
 
         // 拉取应答数据
@@ -286,8 +295,7 @@ void AicCommuRequest::createLoop()
           queue_send_.pop();
 
           // 解析收取的 protobuf 数据包, 根据需要打印内容
-          pack_ptr pack_recv = std::make_shared<pack_meta>();
-          pack_recv->ParseFromArray(msg_recv.data(), msg_recv.size());
+          bytes_ptr pack_recv = std::make_shared<bytes_vec>((char*)msg_recv.data(),(char*)msg_recv.data()+msg_recv.size());
           printPackWrapper(false, pack_recv, thread_id);
 
           // 调用接收回调函数

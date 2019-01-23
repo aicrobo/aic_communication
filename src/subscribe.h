@@ -18,7 +18,7 @@ public:
 
 private:
   void createLoop();
-  void printPackWrapper(const std::string &content, pack_ptr pack, int thread_id);
+  void printPackWrapper(const std::string &content, bytes_ptr pack, int thread_id);
   void invokeRecvCall(const std::string &content, bytes_ptr data);
 
 private:

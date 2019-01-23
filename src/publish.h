@@ -33,7 +33,7 @@ public:
 private:
   void createLoop();
   void clearPublishQueue();
-  void printPackWrapper(const std::string &content, pack_ptr pack, int thread_id);
+  void printPackWrapper(const std::string &content, bytes_ptr pack, int thread_id);
 
 private:
 //  zmq::context_t ctx_;            // 上下文环境

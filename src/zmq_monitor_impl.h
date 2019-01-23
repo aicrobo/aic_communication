@@ -58,7 +58,7 @@ public:
                 }
             }
 
-            std::cout<<"socket status notify thread exit"<<std::endl;
+//            std::cout<<"socket status notify thread exit"<<std::endl;
 
         });
         notify_thread.detach();

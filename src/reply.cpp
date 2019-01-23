@@ -78,8 +78,7 @@ bool AicCommuReply::close()
   if(is_stoped_)
       return false;
 
-  std::cout<<"enter reply mode socket close"<<std::endl;
-
+  callLog(AicCommuLogLevels::TRACE, "%s","enter reply mode socket close\n");
   //关闭proxy
   std::string subscriber =  "TERMINATE";
   zmq::message_t msg_content(subscriber.data(), subscriber.size());
@@ -96,7 +95,7 @@ bool AicCommuReply::close()
   router_.close();
   dealer_.close();
 
-  std::cout<<"leave reply mode socket close"<<std::endl;
+  callLog(AicCommuLogLevels::TRACE, "%s","leave reply mode socket close\n");
   return true;
 }
 
@@ -106,20 +105,30 @@ bool AicCommuReply::close()
  * @param pack                  数据包
  * @return
  */
-void AicCommuReply::printPackWrapper(bool is_send, pack_ptr pack, int thread_id)
+void AicCommuReply::printPackWrapper(bool is_send, bytes_ptr pack, int thread_id)
 {
   if (print_pack_call != nullptr)
   {
-    bytes_ptr data = std::make_shared<bytes_vec>(
-        pack->mutable_data()->data(),
-        pack->mutable_data()->data() + pack->data().size());
+    char* p = pack->data();
+    int total_size  = GET_INT(p);
+    int header_size = GET_INT(p);
+    p = pack->data();
+    bytes_ptr data = std::make_shared<bytes_vec>(p+header_size , p+total_size);
+    OFFSET(p,8);
+    int identity_len = GET_INT(p);
+    std::string identity(p,identity_len);
+    OFFSET(p,identity_len);
+    OFFSET(p,4);
+    int pack_id = GET_INT(p);
+    OFFSET(p,4);
+    long long timestamp = GET_LONGLONG(p);
 
     std::string msg = stringFormat(
-        "[tid:%d] req_id:%u, identity:%s, time:%s",
+        "[tid:%d] pack_id:%u, identity:%s, time:%s",
         thread_id,
-        pack->req_id(),
-        pack->identity().c_str(),
-        std::to_string(pack->timestamp()).c_str());
+        pack_id,
+        identity.c_str(),
+        std::to_string(timestamp).c_str());
 
     print_pack_call(is_send, AicCommuType::SERVER_REPLY, msg.c_str(), data);
   }
@@ -197,7 +206,7 @@ void AicCommuReply::createWorker()
     {
       try
       {
-        pack_ptr pack_recv = nullptr;
+        bytes_ptr pack_recv = nullptr;
         bytes_ptr reply_data = nullptr;
         // 拉取请求数据
         zmq::poll(poll_vec, poll_timeout_ms_); // 这里超时并不影响业务, 与request模式不同
@@ -206,9 +215,8 @@ void AicCommuReply::createWorker()
           zmq::message_t msg_recv;
           worker->recv(&msg_recv);
 
-          // 解析收取的 protobuf 数据包, 根据需要打印内容
-          pack_recv = std::make_shared<pack_meta>();
-          pack_recv->ParseFromArray(msg_recv.data(), msg_recv.size());
+          // 解析收取的数据包, 根据需要打印内容
+          pack_recv = std::make_shared<bytes_vec>((char*)msg_recv.data(),(char*)msg_recv.data()+msg_recv.size());
           printPackWrapper(false, pack_recv, thread_id);
 
           // 调用接收回调函数
@@ -219,13 +227,25 @@ void AicCommuReply::createWorker()
           continue;
         }
 
-        // 把业务数据包封装到 protobuf 数据里
-        auto pack_send = encodeSendBuf(reply_data, pack_recv->req_id());
-        std::string bytes;
-        pack_send->SerializeToString(&bytes);
+        if(pack_recv == nullptr){
+          callLog(AicCommuLogLevels::FATAL, "[tid:%d] recv pack failed\n",
+                  thread_id);
+          break;
+        }
+
+        //获取发送包的pack_id
+        char* p = pack_recv->data();
+        OFFSET(p,8);
+        int identity_len = GET_INT(p);
+        OFFSET(p,identity_len);
+        OFFSET(p,4);
+        int pack_id = GET_INT(p);
+
+        // 构造完整数据包
+        auto pack_send = encodeSendBuf(reply_data, pack_id);
 
         // 发送 protobuf 数据, 根据需要打印内容
-        zmq::message_t msg_send(bytes.data(), bytes.size());
+        zmq::message_t msg_send(pack_send->data(), pack_send->size());
         worker->send(msg_send, ZMQ_NOBLOCK);
         printPackWrapper(true, pack_send, thread_id);
       }

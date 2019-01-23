@@ -1,7 +1,6 @@
 #ifndef __AIC_COMMU_BASE_H__
 #define __AIC_COMMU_BASE_H__
 #include "aic_commu.h"
-#include "aic_commu.pb.h"
 #include "utility.h"
 #include "zmq.hpp"
 #include "zmq_monitor_impl.h"
@@ -9,13 +8,11 @@
 #include <atomic>
 #include <chrono>
 #include "waiter.h"
-
+#include "packet.h"
 
 namespace aicrobot
 {
 
-using pack_meta = aic_commu_proto::message_pack; // protobuf 的类
-using pack_ptr = std::shared_ptr<aic_commu_proto::message_pack>;
 
 /**
  * @brief AicCommuBase  基类
@@ -107,29 +104,40 @@ protected:
    * @brief encodeSendBuf      封装 protobuf 数据包
    * @param buffer             数据内容
    * @param seq_id             序列号
-   * @return                   shared_ptr 包裹的 protobuf 对象
+   * @return                   完整数据包
    */
-  pack_ptr encodeSendBuf(const bytes_ptr &buffer, int32_t seq_id)
+  bytes_ptr encodeSendBuf(const bytes_ptr &buffer, int32_t seq_id)
   {
-    pack_ptr pack = std::make_shared<pack_meta>();
-    pack->set_req_id(seq_id);
-    pack->set_identity(identity_);
-    pack->set_timestamp(getTimestampNow());
-    pack->set_data(static_cast<const void *>(buffer->data()), buffer->size());
+    int total_size   = 4+4+4+identity_.size()+4+4+4+8+4+buffer->size();
+    int header_size  = total_size-buffer->size();
+    bytes_ptr pack = std::make_shared<bytes_vec>(total_size);
+    char *p = pack->data();
+    SET_INT(p,total_size);
+    SET_INT(p,header_size);
+    SET_INT(p,identity_.size());
+    SET_BYTES(p,identity_.data(),identity_.size());
+    SET_INT(p,4);
+    SET_INT(p,seq_id);
+    SET_INT(p,8);
+    SET_LONGLONG(p,getTimestampNow());
+    SET_INT(p,4);
+    SET_BYTES(p,buffer->data(),buffer->size());
     return pack;
   }
 
   /**
    * @brief decodeRecvBuf      解析接收的数据内容
-   * @param pack               shared_ptr 包裹的 protobuf 对象
+   * @param pack               完整数据包
    * @return                   数据内容
    */
-  bytes_ptr decodeRecvBuf(const pack_ptr &pack)
+  bytes_ptr decodeRecvBuf(const bytes_ptr &pack)
   {
-    int size = pack->data().size();
-    bytes_ptr data = std::make_shared<bytes_vec>(
-        pack->mutable_data()->data(),
-        pack->mutable_data()->data() + size);
+
+    char* p = pack->data();
+    int total_size  = GET_INT(p);
+    int header_size = GET_INT(p);
+    p = pack->data();
+    bytes_ptr data = std::make_shared<bytes_vec>(p+header_size , p+total_size);
     return data;
   }
 

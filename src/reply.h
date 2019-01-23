@@ -18,7 +18,7 @@ public:
 private:
   void createProxy();
   void createWorker();
-  void printPackWrapper(bool is_send, pack_ptr pack, int thread_id);
+  void printPackWrapper(bool is_send, bytes_ptr pack, int thread_id);
   bytes_ptr invokeRecvCall(bytes_ptr request_data);
 
 private:

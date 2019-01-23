@@ -34,7 +34,7 @@ public:
 private:
   void createLoop();
   void clearSendQueue();
-  void printPackWrapper(bool is_send, pack_ptr pack, int thread_id);
+  void printPackWrapper(bool is_send, bytes_ptr pack, int thread_id);
   void invokeRecvCall(bytes_ptr data);
   bool restart();
 

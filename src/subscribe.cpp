@@ -58,7 +58,7 @@ bool AicCommuSubscribe::close()
   if (is_stoped_)
       return false;
 
-  std::cout<<"enter subscribe mode socket close"<<std::endl;
+  callLog(AicCommuLogLevels::TRACE, "%s","enter subscribe mode socket close\n");
   is_stoped_ = true;
   while (is_started_)
   {
@@ -68,7 +68,7 @@ bool AicCommuSubscribe::close()
   }
   socket_.close();
   is_started_ = false;
-  std::cout<<"leave subscribe mode socket close"<<std::endl;
+  callLog(AicCommuLogLevels::TRACE, "%s","leave subscribe mode socket close\n");
   return true;
 }
 
@@ -100,21 +100,31 @@ bool AicCommuSubscribe::alterSubContent(const std::string &content,
  * @param pack                  数据包
  * @return
  */
-void AicCommuSubscribe::printPackWrapper(const std::string &content, pack_ptr pack, int thread_id)
+void AicCommuSubscribe::printPackWrapper(const std::string &content, bytes_ptr pack, int thread_id)
 {
   if (print_pack_call != nullptr)
   {
-    bytes_ptr data = std::make_shared<bytes_vec>(
-        pack->mutable_data()->data(),
-        pack->mutable_data()->data() + pack->data().size());
-        
+    char* p = pack->data();
+    int total_size  = GET_INT(p);
+    int header_size = GET_INT(p);
+    p = pack->data();
+    bytes_ptr data = std::make_shared<bytes_vec>(p+header_size , p+total_size);
+    OFFSET(p,8);
+    int identity_len = GET_INT(p);
+    std::string identity(p,identity_len);
+    OFFSET(p,identity_len);
+    OFFSET(p,4);
+    int pack_id = GET_INT(p);
+    OFFSET(p,4);
+    long long timestamp = GET_LONGLONG(p);
+
     std::string msg = stringFormat(
-        "[tid:%d]-[content:%s] req_id:%u, identity:%s, time:%s",
+        "[tid:%d]-[content:%s] pack_id:%u, identity:%s, time:%s",
         thread_id,
         content.c_str(),
-        pack->req_id(),
-        pack->identity().c_str(),
-        std::to_string(pack->timestamp()).c_str());
+        pack_id,
+        identity.c_str(),
+        std::to_string(timestamp).c_str());
 
     print_pack_call(false, AicCommuType::CLIENT_SUBSCRIBE, msg.c_str(), data);
   }
@@ -164,9 +174,8 @@ void AicCommuSubscribe::createLoop()
           zmq::message_t msg_data;
           socket_.recv(&msg_data);
 
-          // 解析收取的 protobuf 数据包, 根据需要打印内容
-          pack_ptr pack_recv = std::make_shared<pack_meta>();
-          pack_recv->ParseFromArray(msg_data.data(), msg_data.size());
+          // 解析收取数据包, 根据需要打印内容
+          bytes_ptr pack_recv = std::make_shared<bytes_vec>((char*)msg_data.data(),(char*)msg_data.data()+msg_data.size());
           printPackWrapper(content, pack_recv, thread_id);
 
           // 调用接收回调函数

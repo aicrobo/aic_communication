@@ -9,7 +9,6 @@
 #ifdef _WIN32
 #ifdef AIC_COMMU_BUILD
 #pragma comment(lib, "libzmq.lib")
-#pragma comment(lib, "libprotobuf.lib")
 #define EXPORT_CLASS __declspec(dllexport)
 #else
 #define EXPORT_CLASS __declspec(dllimport)
@@ -70,14 +69,15 @@ enum class EXPORT_CLASS AicCommuStatus
 
 enum class EXPORT_CLASS AicCommuLogLevels
 {
-  DEBUG,          // 信息最全, 往下递减
+  TRACE=-1,
+  DEBUG,
   INFO,
   WARN,
   FATAL,
 };
 
-using bytes_vec = std::vector<unsigned char>;
-using bytes_ptr = std::shared_ptr<std::vector<unsigned char>>;
+using bytes_vec = std::vector<char>;
+using bytes_ptr = std::shared_ptr<std::vector<char>>;
 
 /**
  * @brief LogCall         日志打印回调函数

@@ -57,7 +57,7 @@ bool AicCommuPublish::close()
 
     if(is_stoped_)
         return false;
-    std::cout<<"enter publish mode socket close"<<std::endl;
+    callLog(AicCommuLogLevels::TRACE, "%s","enter publish mode socket close\n");
     is_stoped_ = true;
     while (is_started_)
     {
@@ -69,7 +69,7 @@ bool AicCommuPublish::close()
     is_started_ = false;
     socket_.close();
     clearPublishQueue();
-    std::cout<<"leave publish mode socket close"<<std::endl;
+    callLog(AicCommuLogLevels::TRACE, "%s","leave publish mode socket close\n");
     return true;
 }
 
@@ -101,21 +101,31 @@ void AicCommuPublish::clearPublishQueue()
  * @param pack                  数据包
  * @return
  */
-void AicCommuPublish::printPackWrapper(const std::string &content, pack_ptr pack, int thread_id)
+void AicCommuPublish::printPackWrapper(const std::string &content, bytes_ptr pack, int thread_id)
 {
   if (print_pack_call != nullptr)
   {
-    bytes_ptr data = std::make_shared<bytes_vec>(
-        pack->mutable_data()->data(),
-        pack->mutable_data()->data() + pack->data().size());
+    char* p = pack->data();
+    int total_size  = GET_INT(p);
+    int header_size = GET_INT(p);
+    p = pack->data();
+    bytes_ptr data = std::make_shared<bytes_vec>(p+header_size , p+total_size);
+    OFFSET(p,8);
+    int identity_len = GET_INT(p);
+    std::string identity(p,identity_len);
+    OFFSET(p,identity_len);
+    OFFSET(p,4);
+    int pack_id = GET_INT(p);
+    OFFSET(p,4);
+    long long timestamp = GET_LONGLONG(p);
 
     std::string msg = stringFormat(
-        "[tid:%d]-[content:%s] req_id:%u, identity:%s, time:%s",
+        "[tid:%d]-[content:%s] pack_id:%u, identity:%s, time:%s",
         thread_id,
         content.c_str(),
-        pack->req_id(),
-        pack->identity().c_str(),
-        std::to_string(pack->timestamp()).c_str());
+        pack_id,
+        identity.c_str(),
+        std::to_string(timestamp).c_str());
 
     print_pack_call(true, AicCommuType::SERVER_PUBLISH, msg.c_str(), data);
   }
@@ -160,11 +170,9 @@ void AicCommuPublish::createLoop()
         // 把业务数据包封装到 protobuf 数据里
         auto pack_send = encodeSendBuf(data, seq_id_);
         ++seq_id_;
-        std::string bytes;
-        pack_send->SerializeToString(&bytes);
 
         // 发送 protobuf 数据, 根据需要打印内容
-        zmq::message_t msg_data(bytes.data(), bytes.size());
+        zmq::message_t msg_data(pack_send->data(), pack_send->size());
         socket_.send(msg_data);
         printPackWrapper(subscriber, pack_send, thread_id);
       }
