@@ -12,6 +12,8 @@ add_executable(pub_proto pub.cpp packet.pb.cc)
 
 if(WIN32)
 
+add_definitions(-DPROTOBUF_USE_DLLS)
+
 set(DEP_LIB libzmq.lib libprotobuf.lib aic_commu.lib)
 target_link_libraries(req_proto ${DEP_LIB})
 target_link_libraries(rep_proto ${DEP_LIB})
