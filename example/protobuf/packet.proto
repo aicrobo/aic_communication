@@ -1,0 +1,75 @@
+// See README.txt for information and build instructions.
+//
+// Note: START and END tags are used in comments to define sections used in
+// tutorials.  They are not part of the syntax for Protocol Buffers.
+//
+// To get an in-depth walkthrough of this file and the related examples, see:
+// https://developers.google.com/protocol-buffers/docs/tutorials
+
+// [START declaration]
+syntax = "proto3";
+package packet;
+
+
+/*********************头部***************************/
+//请求包头部
+message RequestHeader{	
+	uint32	type		= 1;	//请求类型
+}
+
+//返回包头部
+message ResponseHeader{	
+	uint32	type		= 1;	//请求类型
+	int32	err_no		= 2;	//错误码
+	string	err_msg		= 3;	//错误信息	
+}
+
+//通知包头部
+message NotifyHeader{	
+	uint32	type		= 1;	//通知类型
+}
+
+/***********************请求**************************/
+//请求包数据
+message RequestData{
+	RequestHeader	header 	= 1;	//请求头部
+	bytes		body	= 2;	//请求体，如果没有，长度可以为0。从body可以反序列化出对应的结构
+}
+
+//测试请求包
+message TestRequest{
+	string		msg	= 1;
+	int32		order	= 2;
+}
+
+
+/***********************返回**************************/
+//返回包数据
+message ResponseData{	
+	ResponseHeader 	header 	= 1;	//返回包头部
+	bytes		body 	= 2;	//返回包数据，如果除了头部没有其他数据，body长度为0，从body可以反序列化出对应的结构
+}
+
+//测试应答包
+message TestResponse{
+	string		result	= 1;
+	int32		order	= 2;
+}
+
+/***********************通知**************************/
+//通知包数据
+message NotifyData{	
+	NotifyHeader 	header 	= 1;	//通知包头部
+	bytes		body 	= 2;	//通知包数据，如果除了头部没有其他数据，body长度为0，从body可以反序列化出对应的结构	
+}
+
+//测试应答包
+message TestNotify{
+	string		msg	= 1;
+	int32		order	= 2;
+}
+
+
+
+
+

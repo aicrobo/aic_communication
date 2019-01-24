@@ -27,4 +27,16 @@ include_directories(
 endif()
 
 add_subdirectory(src)
-add_subdirectory(example)
+
+if(TEST_JSON)
+add_subdirectory(example/json)
+endif()
+
+if(TEST_PROTOBUF)
+add_subdirectory(example/protobuf)
+endif()
+
+if(TEST)
+add_subdirectory(example/json)
+add_subdirectory(example/protobuf)
+endif()

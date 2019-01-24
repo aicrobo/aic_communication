@@ -1,17 +1,53 @@
 # aic_commu library
 
-## 概括
+## Description
 
-aic_commu library 是一个基于 [libzmq](https://github.com/zeromq/libzmq "libzmq")  封装而成的通讯库。主要提供心跳检测、断线或心跳超时自动重连等一些网络状态检测以及恢复功能，支持请求应答、订阅发布两种模式。
 
-使用该库比直接使用zmq编程更加简单，屏蔽掉了很多底层细节，通过回调函数在业务层与通信库传递数据，使调用者只用关心业务逻辑。
+Aic_commu library is a communication library based on  [libzmq](https://github.com/zeromq/libzmq "libzmq"). It mainly provides some network status detection and recovery functions, such as heartbeat detection, disconnection or automatic reconnection of heartbeat timeout. It supports two modes: request response and subscription publishing.
+
+
+Using this library is simpler than programming directly with zmq, shielding many underlying details, and transferring data between business layer and communication library through callback function, so that callers only care about business logic.
 
 
 ****
 
-## 快速开始
+## QUICK START
 
-#### 依赖:
+* request client
+```c
+auto obj = AicCommuFactory::newSocket(AicCommuType::CLIENT_REQUEST, "127.0.0.1", 60005, "req");
+obj->setRecvCall(&req_recv_func, false);
+obj->run(); 
+sting msg = "test req msg";
+bytes_ptr pack = std::make_shared<bytes_vec>(msg.data(),msg.data()+msg.size()); 
+obj->send();
+```
+
+* response server
+```c
+auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_REPLY, "*", 60005, "rep");
+obj->setRecvCall(&rep_recv_func, false);
+obj->run(); 
+```
+
+* subscribe client
+```c
+auto obj = AicCommuFactory::newSocket(AicCommuType::CLIENT_SUBSCRIBE, "127.0.0.1", 60006, "sub");
+obj->setRecvCall(&sub_recv_func, false);
+obj->run();
+obj->alterSubContent("sub-test", true);
+```
+
+* publish server
+```c
+auto obj = AicCommuFactory::newSocket(AicCommuType::SERVER_PUBLISH, "*", 60006, "pub");
+obj->run();
+std::string msg      = "test pub msg";
+bytes_ptr pack = std::make_shared<bytes_vec>(msg.data(),msg.data() + msg.length());
+obj->publish("sub-test", pack);
+```
+
+#### DEPENDS:
 
 - Windows 10, Linux
 - CMake 3.5 (on Linux & Windows)
@@ -19,12 +55,12 @@ aic_commu library 是一个基于 [libzmq](https://github.com/zeromq/libzmq "lib
 - C compiler and GNU C++ compiler (on Linux)
 - **libzmq-master(commit 12005bd92629c2cca108ae1731a495e93a3aef91)**
 
-#### 编译(linux):
+#### BUILD(linux):
 
-1. 下载本项目代码。
-2. 下载依赖库源码
-	libzmq（https://github.com/zeromq/libzmq.git）
-3. 编译zmq为静态库
+1. download aic_communication source code。
+2. download libzmq source code
+    libzmq（https://github.com/zeromq/libzmq.git）
+3. build zmq to static library
 ```c
 cd libzmq
 ./autogen.sh
@@ -32,7 +68,7 @@ cd libzmq
 make
 sudo make install
 ```
-4. 编译aic_communication
+4. build aic_communication
 ```c
 cd  aic_communication
 mkdir build 
@@ -40,53 +76,73 @@ cd build
 cmake .. 
 make
 sudo make install
-```	
+```
+	
+5. build example
+ * in step 4,replace cmake .. with
+    - cmake .. -DTEST_JSON=YES (only build json version example )
+    - cmake .. -DTEST_PROTOBUF=YES (only build protobuf version example)
+    - cmake .. -DTEST=YES (build all version example)
 
-#### 编译(windows):
+#### BUILD(windows):
 
-1. 下载本项目代码。
-2. 下载依赖库源码
+1. download aic_communication source code。
+2. download libzmq source code
 	libzmq（https://github.com/zeromq/libzmq.git）
-3. 编译zmq
+3. build zmq
 ```c
 cd  aic_communication/builds
 mkdir windows 
 cd windows 
 cmake ../.. 
-双击打开libzmq.vcxproj，生成dll与lib
+double click libzmq.vcxproj，build dll and lib
 ```
-4. 编译aic_communication
+4. build aic_communication
 ```c
 cd aic_communication
 mkdir build
 cmake ..
-双击打开aic_commu.sln，右键aic_commu项目，点击属性，配置好zmq和protobuf的头文件与库文件目录，生成aic_commu.dll与aic_commu.lib。
-配置pub、rep、req、sub四个工程的库文件目录，生成可执行文件
+double click aic_commu.sln，right click aic_commu project，click property，config header and lib file paths of zmq and protobuf，build aic_commu.dll and aic_commu.lib。
 ```
+5. build example
+ * in step 4,replace cmake .. with
+    - cmake .. -DTEST_JSON=YES (only build json version example )
+    - cmake .. -DTEST_PROTOBUF=YES (only build protobuf version example)
+    - cmake .. -DTEST=YES (build all version example)
+ * notice: if you build protobuf version example,you must download and build [protobuf](https://github.com/protocolbuffers/protobuf "protobuf") first, then run commands:'cd example/protobuf' 'protoc --cpp_out=. packet.proto'.then you will get two new files:packet.pb.h,packet.pb.cc
 
+#### USING
 
-#### 使用
+prepare：config right ips in source code,rebuild project 
 
-准备：设置好实例程序中的ip地址，重新编译实例程序。
+request-reply mode
 
-请求应答模式
-
- * 开启一个终端，启动req
- * 开启另一个终端，启动rep
+ * open one console，run req_json or req_proto
+ * open another console，run rep_json or rep_proto
  
-发布订阅模式
+publish-subscribe mode
 
- * 开启一个终端，启动sub
- * 开启另一个终端，启动pub
+ * open one console，run sub_json or sub_proto
+ * open another console，run pub_json or pub_proto
 
-## -----------版本记录-----------
-## 1.1.7版本更新内容 
-修复bug。
- * 修复request模式socket超时后，永远无法接收和发送数据的bug。
- * 修复socket析构时引起的死锁问题。
+notice: *_json and *_json is a pair,*_proto and *_proto is a pair,you can't run one *_json and one *_proto 
 
-新增功能。
- * send函数添加参数，可设置为无连接时丢弃请求数据。
+
+
+### -----------VERSION LOG-----------
+
+#### 1.2 version   
+* update:
+ * remove libprotobuf dependence 
+
+#### 1.1.7 version   
+
+* fix bugs:
+ * fix bug what you never can send and recv data after request timeout when in request mode。
+ * fix bug what deadlock caused by socket destruction。
+
+* new functions:
+ * add param to send function，it will discard send packet when connect with server hasn't build。
 
 
 
