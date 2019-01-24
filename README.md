@@ -59,7 +59,7 @@ obj->publish("sub-test", pack);
 
 1. download aic_communication source code。
 2. download libzmq source code
-    libzmq（https://github.com/zeromq/libzmq.git）
+    [libzmq](https://github.com/zeromq/libzmq.git "libzmq")
 3. build zmq to static library
 ```c
 cd libzmq
@@ -88,7 +88,7 @@ sudo make install
 
 1. download aic_communication source code。
 2. download libzmq source code
-	libzmq（https://github.com/zeromq/libzmq.git）
+	[libzmq](https://github.com/zeromq/libzmq.git "libzmq")
 3. build zmq
 ```c
 cd  aic_communication/builds
